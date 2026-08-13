@@ -1,0 +1,47 @@
+cmake_minimum_required(VERSION 3.10)
+project(xgeom_skin_compiler LANGUAGES C CXX)
+set(TARGET_PROJECT "xgeom_skin_compiler")
+set(COMPONENT_REGISTRY "")
+
+
+# disable strict string conformance. AMD compresator requires it!
+if(MSVC)
+  add_compile_options(/Zc:strictStrings-)
+endif()
+
+include(FetchContent)
+FetchContent_Declare(
+  xcmake_tools
+  GIT_REPOSITORY https://github.com/LIONant-depot/xcmake_tools.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+  SOURCE_DIR "${CMAKE_BINARY_DIR}/_deps/xcmake_tools"
+)
+FetchContent_MakeAvailable(xcmake_tools)
+include(${CMAKE_BINARY_DIR}/_deps/xcmake_tools/Common.cmake)
+
+add_executable(${TARGET_PROJECT}
+  "source/Compiler/main.cpp"
+)
+
+source_group("GeomSkin_Compiler" FILES
+  "source/Compiler/main.cpp"
+)
+
+# Allow access to other plugins
+target_include_directories(${TARGET_PROJECT} PRIVATE $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/../../>)
+
+add_subdirectory("build/dependency" "${CMAKE_CURRENT_BINARY_DIR}/xgeom_skin_compiler")
+
+
+# copy the assimp dll into the project
+file(COPY ${CMAKE_SOURCE_DIR}/dependencies/assimp/BINARIES/Win32/bin/Release/assimp-vc143-mt.dll
+     DESTINATION ${CMAKE_BINARY_DIR})
+
+file(COPY ${CMAKE_SOURCE_DIR}/dependencies/assimp/BINARIES/Win32/bin/Release/assimp-vc143-mt.dll
+     DESTINATION ${CMAKE_BINARY_DIR}/Release)
+
+file(COPY ${CMAKE_SOURCE_DIR}/dependencies/assimp/BINARIES/Win32/bin/Release/assimp-vc143-mt.dll
+     DESTINATION ${CMAKE_BINARY_DIR}/Debug)
+
+ProcessComponents()
