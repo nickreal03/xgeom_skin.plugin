@@ -24,7 +24,7 @@
 //						Too low(< 5) dims directional cues; too high(> 500) blows out without tonemap.
 // AmbientLightColor: Low - intensity fill(RGB 0.1 - 1.0, e.g., vec3(0.5) for neutral).Represents global illum; 
 //						over 1.0 unphysical but brightens shadows.
-// wSpaceLightPos	: XYZ position, W radius(> 0 for finite falloff, 0 for infinite 1 / dist²). 
+// wSpaceLightPos	: XYZ position, W radius(> 0 for finite falloff, 0 for infinite 1 / distï¿½). 
 //						Set radius to bbox extent for soft decay; prevents harsh infinite - range lighting.
 // wSpaceEyePos		: Camera position(must be accurate; vec4(0) causes invalid V vector and black artifacts).
 // LightParams		: .x = area radius (0-1+ for specular/soft shadow approx, soften highlights 10-20% realism),
@@ -41,7 +41,7 @@
 //						For dielectrics, metallic = 0, F0 = 0.04. Use roughness maps for variation(e.g., scratches).
 // Integration		: Linear color space required; apply tonemap(Reinhard: color / (color + 1)) and gamma(pow(1 / 2.2)) 
 //						post - shader. Enable HDR for > 1 values.ShadowPCF assumes valid shadow map; debug with Shadow = 1.0.
-// Performance		: Early culls(shadow / NdotL / att) save 30 - 50 % in dark / far areas—profile with GPU tools.
+// Performance		: Early culls(shadow / NdotL / att) save 30 - 50 % in dark / far areasï¿½profile with GPU tools.
 //						Avoid in shaders with many lights; cluster / defer for multiples.
 // Quality			: TODO: Add IBL(cubemap for specular ambient) for non - flat shadows. For production, 
 //						layer clearcoat(extra specular term) or SSS if extending inputs.
@@ -136,7 +136,7 @@ float E_FON_approx(float mu, float r) {
 
 // EON Diffuse (Energy-Preserving Oren-Nayar, JCGT 2025): Analytical, reciprocity-compliant rough diffuse model.
 // Fixes energy loss (up to 30% on rough surfaces) and dark grazing edges in Burley; ideal for fabrics/skin.
-// r = perceptual roughness [0,1]; rho = albedo (vec3); mu_i = NdotL; mu_o = NdotV; s = L·V - NdotL*NdotV.
+// r = perceptual roughness [0,1]; rho = albedo (vec3); mu_i = NdotL; mu_o = NdotV; s = Lï¿½V - NdotL*NdotV.
 // Uses approximate albedo for perf; full BRDF f_r including /pi and rho.
 vec3 DiffuseEON(vec3 rho, float r, float mu_i, float mu_o, float s) {
 	float AF = 1.0 / (1.0 + CONSTANT1_FON * r);
@@ -197,7 +197,7 @@ vec3 PBRLighting
 	vec3 emissive = inEmissiveColor * inAO; // Modulate early for occlusion
 
 
-	// Ambient baseline: Compute always—cheap; 2025 grazing approx for subtle IBL hack (neural-inspired, no cubemap).
+	// Ambient baseline: Compute alwaysï¿½cheap; 2025 grazing approx for subtle IBL hack (neural-inspired, no cubemap).
 	vec3    N                   = TransformNotmalToWorld(inNormal);
 	vec3	V					= normalize(UBOLight.wSpaceEyePos.xyz - In.wSpacePosition.xyz);
 	float	NdotV				= saturate(dot(N, V));
@@ -231,10 +231,13 @@ vec3 PBRLighting
 	float	Vis					= VisibilitySmithCorrelated(NdotV, NdotL, alpha);
 	vec3	specular			= D * F * Vis;
 
-	// 2025 Innovation: Simple multiscatter energy compensation (UE5/Filament, SIGGRAPH 2025 neural validation); scales rough spec ~20-30% brighter.
-	vec3	avgF				= F * (1.0 - perceptualRoughness) + vec3(perceptualRoughness); // Approx avg Fresnel
-	vec3	multiScatter		= (vec3(1.0) - avgF) / max(vec3(1e-6), vec3(1.0) - avgF * perceptualRoughness);
-	specular *= multiScatter;
+	// NOTE: a multiscatter energy-compensation term used to sit here, intended to brighten rough
+	// specular ~20-30%. Its formula did the opposite - multiScatter = (1-avgF)/(1-avgF*roughness)
+	// is <1 for every roughness>0 and degenerates to exactly 0 at roughness=1 (denominator ->
+	// 1-avgF, numerator -> 1-avgF, but the max(1e-6,...) floor wins first), so it was silently
+	// killing specular instead of boosting it. Removed rather than "corrected" in place - a real
+	// multiscatter compensation term needs validating against a reference render, which a comment
+	// fix alone can't provide. Plain Cook-Torrance (D*F*Vis) below is the safe fallback.
 
 	vec3	kD					= (vec3(1.0) - F) * (1.0 - inMetalic);
 	vec3	diffuse				= kD * DiffuseEON(inAlbedo, perceptualRoughness, NdotL, NdotV, dot(L, V) - NdotL * NdotV);
